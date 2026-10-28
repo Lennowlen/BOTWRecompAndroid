@@ -30,11 +30,29 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Setup Android NDK & CMake
+        run: |
+          echo "Installing CMake 3.30.4..."
+          curl -fsSL -o cmake-3.30.4-linux-x86_64.tar.gz https://github.com/Kitware/CMake/releases/download/v3.30.4/cmake-3.30.4-linux-x86_64.tar.gz
+          mkdir -p $ANDROID_HOME/cmake/3.30.4
+          tar -xzf cmake-3.30.4-linux-x86_64.tar.gz -C $ANDROID_HOME/cmake/3.30.4 --strip-components=1
+          echo "$ANDROID_HOME/cmake/3.30.4/bin" >> $GITHUB_PATH
+          echo "CMAKE_DIR=$ANDROID_HOME/cmake/3.30.4/bin" >> $GITHUB_ENV
+
       - name: Setup Android NDK
         id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r26d
+          ndk-version: r27c
+          link-to-sdk: true
+
+      - name: Link NDK Version
+        run: |
+          # AGP expects ndkVersion '30.0.16248370' or matching NDK in $ANDROID_HOME/ndk/
+          ACTUAL_NDK="${{ steps.setup-ndk.outputs.ndk-path }}"
+          mkdir -p $ANDROID_HOME/ndk
+          ln -sf "$ACTUAL_NDK" "$ANDROID_HOME/ndk/30.0.16248370"
+          echo "NDK symlinked to 30.0.16248370"
 
       - name: Download Prebuilt Dependencies & Fonts
         run: |
