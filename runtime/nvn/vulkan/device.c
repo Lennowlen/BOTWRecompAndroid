@@ -515,15 +515,19 @@ static void create_device(void) {
     // Mali-G2-Ultra (Xring O3, driver r56p0): with the import and the global-memory arena (exec.c gres_init) the game's
     // text went missing from every menu; with both off it is all there (issue #44, the reporter's own tests). Both off
     // there unless LARECOMP_VK_HOST_IMPORT / LARECOMP_VK_NO_GRES say otherwise.
+    // Maleoon (Huawei Kirin / MatePad): similar driver memory constraints; disable GRES and host_import for stability.
     bool mali_g2 = strstr(g_vk.props.deviceName, "Mali-G2-Ultra") != NULL;
-    if (mali_g2) setenv("LARECOMP_VK_NO_GRES", "1", 0);
+    bool maleoon = strstr(g_vk.props.deviceName, "Maleoon") != NULL ||
+                   strstr(g_vk.props.deviceName, "Kirin") != NULL;
+    if (mali_g2 || maleoon) setenv("LARECOMP_VK_NO_GRES", "1", 0);
     if (g_vk.host_import) {
         const char *e = getenv("LARECOMP_VK_HOST_IMPORT");
         bool xclipse = strstr(g_vk.props.deviceName, "Xclipse") || g_vk.props.vendorID == 0x144D;  // (Samsung)
-        if (e ? !atoi(e) : xclipse || mali_g2) {
+        if (e ? !atoi(e) : xclipse || mali_g2 || maleoon) {
             g_vk.host_import = false;
             LOG("[vk] guest heap import left off (%s)\n", e ? "LARECOMP_VK_HOST_IMPORT=0" :
-                xclipse ? "Xclipse: its first submission fails" : "Mali-G2-Ultra: the game's text went missing");
+                xclipse ? "Xclipse: its first submission fails" :
+                maleoon ? "Maleoon: Kirin GPU memory stability" : "Mali-G2-Ultra: the game's text went missing");
         }
     }
 #endif
