@@ -31,19 +31,23 @@ jobs:
           java-version: '17'
 
       - name: Setup Android NDK
+        id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r26d
 
-      - name: Cache Gradle packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+      - name: Download Prebuilt Dependencies & Fonts
+        run: |
+          mkdir -p android/deps/out/fonts android/deps/out/include android/deps/out/lib
+          curl -fsSL -o dejavu.tar.bz2 https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.tar.bz2
+          tar -xjf dejavu.tar.bz2
+          cp dejavu-fonts-ttf-2.37/ttf/DejaVuSans.ttf android/deps/out/fonts/
+          # Extract prebuilt native libraries (SDL3, shaderc) from official release
+          curl -fsSL -o upstream.apk https://github.com/mamcjr/BOTWRecompAndroid/releases/download/v0.2.2-beta/BOTWRecompAndroid-0.2.2-beta.apk
+          unzip -q upstream.apk -d upstream_unpacked
+          if [ -d "upstream_unpacked/lib/arm64-v8a" ]; then
+            cp upstream_unpacked/lib/arm64-v8a/*.so android/deps/out/lib/ || true
+          fi
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/botwrecompandroid/gradlew
