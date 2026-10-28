@@ -56,15 +56,36 @@ jobs:
 
       - name: Download Prebuilt Dependencies & Fonts
         run: |
-          mkdir -p android/deps/out/fonts android/deps/out/include android/deps/out/lib
+          mkdir -p android/deps/out/fonts android/deps/out/include android/deps/out/lib android/deps/out/volk
+          
+          # 1. DejaVu Font
           curl -fsSL -o dejavu.tar.bz2 https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.tar.bz2
           tar -xjf dejavu.tar.bz2
           cp dejavu-fonts-ttf-2.37/ttf/DejaVuSans.ttf android/deps/out/fonts/
-          # Extract prebuilt native libraries (SDL3, shaderc) from official release
+          
+          # 2. Vulkan Headers & Volk
+          curl -fsSL -o vulkan-headers.tar.gz https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/vulkan-sdk-1.4.350.1.tar.gz
+          tar -xzf vulkan-headers.tar.gz
+          cp -r Vulkan-Headers-vulkan-sdk-1.4.350.1/include/vulkan Vulkan-Headers-vulkan-sdk-1.4.350.1/include/vk_video android/deps/out/include/
+          
+          curl -fsSL -o vma.tar.gz https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/archive/refs/tags/v3.3.0.tar.gz
+          tar -xzf vma.tar.gz
+          mkdir -p android/deps/out/include/vma
+          cp VulkanMemoryAllocator-3.3.0/include/vk_mem_alloc.h android/deps/out/include/vma/
+          
+          curl -fsSL -o volk.tar.gz https://github.com/zeux/volk/archive/refs/tags/vulkan-sdk-1.4.350.1.tar.gz
+          tar -xzf volk.tar.gz
+          cp volk-vulkan-sdk-1.4.350.1/volk.h volk-vulkan-sdk-1.4.350.1/volk.c android/deps/out/volk/
+          
+          # 3. Extract prebuilt native libraries from official release
           curl -fsSL -o upstream.apk https://github.com/mamcjr/BOTWRecompAndroid/releases/download/v0.2.2-beta/BOTWRecompAndroid-0.2.2-beta.apk
           unzip -q upstream.apk -d upstream_unpacked
           if [ -d "upstream_unpacked/lib/arm64-v8a" ]; then
             cp upstream_unpacked/lib/arm64-v8a/*.so android/deps/out/lib/ || true
+          fi
+          if [ -d "upstream_unpacked/assets/gen" ]; then
+            mkdir -p android/deps/out/gen
+            cp -r upstream_unpacked/assets/gen/* android/deps/out/gen/ || true
           fi
 
       - name: Grant execute permission for gradlew
