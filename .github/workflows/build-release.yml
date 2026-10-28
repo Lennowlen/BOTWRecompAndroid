@@ -97,6 +97,15 @@ jobs:
           cp ffmpeg-9.0.2/libavutil/*.h android/deps/out/include/libavutil/ || true
           cp ffmpeg-9.0.2/libswscale/*.h android/deps/out/include/libswscale/ || true
           
+          # Generate generated FFmpeg headers (avconfig.h) for aarch64
+          cat << 'EOF' > android/deps/out/include/libavutil/avconfig.h
+#ifndef AVUTIL_AVCONFIG_H
+#define AVUTIL_AVCONFIG_H
+#define AV_HAVE_BIGENDIAN 0
+#define AV_HAVE_FAST_UNALIGNED 1
+#endif /* AVUTIL_AVCONFIG_H */
+EOF
+          
           # 3. Extract prebuilt native libraries from official release
           curl -fsSL -o upstream.apk https://github.com/mamcjr/BOTWRecompAndroid/releases/download/v0.2.2-beta/BOTWRecompAndroid-0.2.2-beta.apk
           unzip -q upstream.apk -d upstream_unpacked
