@@ -63,7 +63,13 @@ jobs:
           tar -xjf dejavu.tar.bz2
           cp dejavu-fonts-ttf-2.37/ttf/DejaVuSans.ttf android/deps/out/fonts/
           
-          # 2. Vulkan Headers & Volk
+          # 2. Vulkan Headers & Volk & SDL3 Headers
+          curl -fsSL -o sdl3.tar.gz https://github.com/libsdl-org/SDL/releases/download/release-3.4.16/SDL3-3.4.16.tar.gz
+          tar -xzf sdl3.tar.gz
+          cp -r SDL3-3.4.16/include/SDL3 android/deps/out/include/
+          mkdir -p android/deps/out/java/org/libsdl
+          cp -r SDL3-3.4.16/android-project/app/src/main/java/org/libsdl/app android/deps/out/java/org/libsdl/
+          
           curl -fsSL -o vulkan-headers.tar.gz https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/vulkan-sdk-1.4.350.1.tar.gz
           tar -xzf vulkan-headers.tar.gz
           cp -r Vulkan-Headers-vulkan-sdk-1.4.350.1/include/vulkan Vulkan-Headers-vulkan-sdk-1.4.350.1/include/vk_video android/deps/out/include/
@@ -76,6 +82,11 @@ jobs:
           curl -fsSL -o volk.tar.gz https://github.com/zeux/volk/archive/refs/tags/vulkan-sdk-1.4.350.1.tar.gz
           tar -xzf volk.tar.gz
           cp volk-vulkan-sdk-1.4.350.1/volk.h volk-vulkan-sdk-1.4.350.1/volk.c android/deps/out/volk/
+          
+          curl -fsSL -o shaderc.tar.gz https://github.com/google/shaderc/archive/refs/tags/v2026.3.tar.gz
+          tar -xzf shaderc.tar.gz
+          mkdir -p android/deps/out/include/shaderc
+          cp shaderc-2026.3/libshaderc/include/shaderc/*.h android/deps/out/include/shaderc/ || true
           
           # 3. Extract prebuilt native libraries from official release
           curl -fsSL -o upstream.apk https://github.com/mamcjr/BOTWRecompAndroid/releases/download/v0.2.2-beta/BOTWRecompAndroid-0.2.2-beta.apk
