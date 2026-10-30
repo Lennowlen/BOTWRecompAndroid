@@ -104,6 +104,8 @@ public class BOTWRecompAndroidActivity extends SDLActivity {
             copyIfChanged(new File(games, "botwgame.so.id"), new File(res, "botwgame.so.id"));
             setenv("LARECOMP_NATIVE_LIB_DIR", getApplicationInfo().nativeLibraryDir);
             setenv("LARECOMP_LAST_EXIT", lastExit());
+            // MatePad Maleoon GPU stability: dynamic rendering crashes driver in vkCmdBeginRendering
+            setenv("LARECOMP_NO_DYNAMIC_RENDERING", "1");
             File gen = new File(getFilesDir(), "gen");
             unpackGen(gen);
             setenv("LARECOMP_GEN_DIR", gen.getAbsolutePath());

@@ -517,10 +517,16 @@ static void create_device(void) {
     // text went missing from every menu; with both off it is all there (issue #44, the reporter's own tests). Both off
     // there unless LARECOMP_VK_HOST_IMPORT / LARECOMP_VK_NO_GRES say otherwise.
     // Maleoon (Huawei Kirin / MatePad): similar driver memory constraints; disable GRES and host_import for stability.
+    // In addition, Maleoon 920A's VK_KHR_dynamic_rendering crashes in vkCmdBeginRendering during complex scene passes;
+    // enforce classic render passes (rpcompat.c).
     bool mali_g2 = strstr(g_vk.props.deviceName, "Mali-G2-Ultra") != NULL;
     bool maleoon = strstr(g_vk.props.deviceName, "Maleoon") != NULL ||
                    strstr(g_vk.props.deviceName, "Kirin") != NULL;
     if (mali_g2 || maleoon) setenv("LARECOMP_VK_NO_GRES", "1", 0);
+    if (maleoon) {
+        no_dr = true;
+        cg[OPT_DR] = false;
+    }
     if (g_vk.host_import) {
         const char *e = getenv("LARECOMP_VK_HOST_IMPORT");
         bool xclipse = strstr(g_vk.props.deviceName, "Xclipse") || g_vk.props.vendorID == 0x144D;  // (Samsung)
