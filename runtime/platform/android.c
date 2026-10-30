@@ -232,8 +232,10 @@ static bool wt_broken;  // (an mprotect failed - out of memory mappings: no new 
 static void wt_lock(void) { while (atomic_flag_test_and_set_explicit(&wt_spin, memory_order_acquire)) {} }
 static void wt_unlock(void) { atomic_flag_clear_explicit(&wt_spin, memory_order_release); }
 
+extern bool native_on(void);
+
 void plat_write_tracking_enable(uint64_t lo, uint64_t hi) {
-    if (wt_state || getenv("LARECOMP_NO_WRITE_TRACKING")) return;
+    if (wt_state || getenv("LARECOMP_NO_WRITE_TRACKING") || native_on()) return;
     lo &= ~0xFFFull;
     hi = (hi + 0xFFF) & ~0xFFFull;
     uint8_t *s = calloc((size_t)((hi - lo) >> 12), 1);

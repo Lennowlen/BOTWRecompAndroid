@@ -100,7 +100,7 @@ jobs:
           printf '#ifndef AVUTIL_AVCONFIG_H\n#define AVUTIL_AVCONFIG_H\n#define AV_HAVE_BIGENDIAN 0\n#define AV_HAVE_FAST_UNALIGNED 1\n#endif /* AVUTIL_AVCONFIG_H */\n' > android/deps/out/include/libavutil/avconfig.h
           
           # 3. Extract prebuilt native libraries from official release
-          curl -fsSL -o upstream.apk https://github.com/mamcjr/BOTWRecompAndroid/releases/download/v0.2.2-beta/BOTWRecompAndroid-0.2.2-beta.apk
+          curl -fsSL -o upstream.apk https://github.com/mamcjr/BOTWRecompAndroid/releases/download/v0.2.4-beta/BOTWRecompAndroid-0.2.4-beta.apk
           unzip -q upstream.apk -d upstream_unpacked
           if [ -d "upstream_unpacked/lib/arm64-v8a" ]; then
             cp upstream_unpacked/lib/arm64-v8a/*.so android/deps/out/lib/ || true

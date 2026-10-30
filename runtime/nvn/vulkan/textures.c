@@ -15,6 +15,20 @@
 // ================================================================== formats
 typedef struct { VkFormat vf; uint8_t expand_rgb, alpha_one; } VkFmt;
 
+// D16_UNORM fallback to D32_SFLOAT if the physical GPU does not support D16 as depth attachment (e.g. Huawei Maleoon)
+static VkFormat depth16(void) {
+    static VkFormat f;
+    if (!f) {
+        VkFormatProperties p;
+        vkGetPhysicalDeviceFormatProperties(g_vk.phys, VK_FORMAT_D16_UNORM, &p);
+        VkFormatFeatureFlags want = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        bool ok = (p.optimalTilingFeatures & want) == want;
+        f = ok ? VK_FORMAT_D16_UNORM : VK_FORMAT_D32_SFLOAT;
+        if (!ok) LOG("[vk] depth16: D32_SFLOAT (fallback: GPU lacks D16_UNORM attachment)\n");
+    }
+    return f;
+}
+
 // DEPTH24_STENCIL8 as itself where the GPU has it for everything the game does with depth (NVIDIA, Intel): half the
 // bytes of D32_SFLOAT_S8_UINT (4 instead of 8 per pixel) for every depth test, clear and copy - the game copies its
 // full-size depth twice a frame. AMD has no D24S8 attachments: D32S8 there (and on Metal). LARECOMP_VK_D24=0: D32S8.
@@ -74,7 +88,7 @@ static VkFmt fmt_of(uint32_t f) {
     case 0x2F: return (VkFmt){VK_FORMAT_R32G32B32A32_UINT};
     case 0x30: return (VkFmt){VK_FORMAT_R32G32B32A32_SINT};
     case 0x31: return (VkFmt){VK_FORMAT_S8_UINT};
-    case 0x32: return (VkFmt){VK_FORMAT_D16_UNORM};
+    case 0x32: return (VkFmt){depth16()};
     case 0x33: return (VkFmt){VK_FORMAT_D32_SFLOAT};  // DEPTH24 (as on Metal: no 24-bit depth there)
     case 0x34: return (VkFmt){VK_FORMAT_D32_SFLOAT};
     case 0x35: return (VkFmt){depth24_stencil8()};
