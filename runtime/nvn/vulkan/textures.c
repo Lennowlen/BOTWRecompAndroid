@@ -426,6 +426,14 @@ static void create_image(NvnTexture *t, TexBackend *b) {
             if (!told) { told = true; LOG("[vk] no BC textures on this GPU: decoded on the CPU at upload\n"); }
             b->bc_vf = vf;
             vf = bc_target(vf, &bpp);
+            // On GPUs without native BC compression (Mali, etc.), textures decoded to RGBA expand 4x-8x in memory.
+            // Cap mip levels to prevent allocating exponential VRAM and host transient staging buffers.
+            static int max_mips = -1;
+            if (max_mips < 0) {
+                const char *e = getenv("LARECOMP_BC_MAX_MIPS");
+                max_mips = e ? atoi(e) : 1; // default to 1 mip level on Android if BC is decoded on CPU
+            }
+            if (max_mips > 0 && levels > (uint32_t)max_mips) levels = (uint32_t)max_mips;
         } else
 #endif
         if (astc && fi && fi->bpb == 16) {  // desktop GPUs: decoded on the CPU into an RGBA8 image of the same colour space

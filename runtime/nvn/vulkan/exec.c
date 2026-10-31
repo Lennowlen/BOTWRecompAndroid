@@ -934,7 +934,21 @@ VkDescriptorSet vk_alloc_set(VkDescriptorSetLayout layout) {
 // ================================================================== transient memory ring
 // 64 MB host-visible chunks (device-local when the GPU exposes resizable BAR); a chunk is reused once every
 // submission that allocated from it has completed.
+// Android / Mali GPU optimization: reduce default chunk size on mobile to prevent transient host-visible memory bloating
+#ifdef __ANDROID__
+static uint64_t chunk_size(void) {
+    static uint64_t sz;
+    if (!sz) {
+        const char *e = getenv("LARECOMP_VK_CHUNK_SIZE_MB");
+        sz = (e ? (uint64_t)atoi(e) : 16ull) << 20;
+        if (sz < (4ull << 20)) sz = 4ull << 20;
+    }
+    return sz;
+}
+#define CHUNK_SIZE chunk_size()
+#else
 #define CHUNK_SIZE (64ull << 20)
+#endif
 typedef struct { VkBuffer buf; VmaAllocation mem; uint8_t *ptr; uint64_t size, used, seq; } Chunk;
 static Chunk *chunks;
 static int nchunks, active = -1;
