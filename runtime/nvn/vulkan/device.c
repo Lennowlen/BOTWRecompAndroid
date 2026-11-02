@@ -543,8 +543,6 @@ static void create_device(void) {
                 mali ? "Mali: the game's text went missing, and memory ran out" : "settings: game memory on the GPU off");
         }
     }
-        }
-    }
 #endif
     if (g_vk.host_import) ext[n_ext++] = VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME;
     bool fault = has_ext(ep, ne, VK_EXT_DEVICE_FAULT_EXTENSION_NAME);  // device-lost diagnostics (vk_device_fault_report)
