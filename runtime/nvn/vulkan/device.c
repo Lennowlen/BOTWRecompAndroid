@@ -513,16 +513,19 @@ static void create_device(void) {
     // reported to LASRecomp-Android-Plus; LAS Recomp for Android 4a8749f turned it off on every GPU). Here only on
     // Xclipse: without it BOTW's heap goes through CPU copies (~4 GB every 2 s), and Mali drivers may take it.
     // LARECOMP_VK_HOST_IMPORT=0 / 1: off / on on any GPU.
-    // Mali-G2-Ultra (Xring O3, driver r56p0): with the import and the global-memory arena (exec.c gres_init) the game's
-    // text went missing from every menu; with both off it is all there (issue #44, the reporter's own tests). Both off
-    // there unless LARECOMP_VK_HOST_IMPORT / LARECOMP_VK_NO_GRES say otherwise.
+    // Mali (ARM, vendor 0x13B5) whose driver offers the import (r54p1 and later): with it and the global-memory arena
+    // (exec.c gres_init) the game's text went missing from every menu and the title art had grey blocks (Mali-G2-Ultra
+    // r56p0, issue #44; Mali-G1-Ultra r54p1, #121 - both reporters' own tests, all there with both off), and the 3 GB
+    // heap imported at once got the app killed for memory and froze Android (Mali-G610 r56p0, #118). Both off on those
+    // unless LARECOMP_VK_HOST_IMPORT / LARECOMP_VK_NO_GRES say otherwise; the Mali drivers without the extension (r49p1
+    // and older) already go through CPU copies, and keep the arena. Driver compatibility's "Game memory on the GPU" =
+    // Off (gpu_heap 0) also leaves the import off on any driver but Turnip (whose Off is the placed heap's alone).
     // Maleoon (Huawei Kirin / MatePad): similar driver memory constraints; disable GRES and host_import for stability.
     // In addition, Maleoon 920A's VK_KHR_dynamic_rendering crashes in vkCmdBeginRendering during complex scene passes;
     // enforce classic render passes (rpcompat.c).
-    bool mali_g2 = strstr(g_vk.props.deviceName, "Mali-G2-Ultra") != NULL;
+    bool mali = g_vk.props.vendorID == 0x13B5;
     bool maleoon = strstr(g_vk.props.deviceName, "Maleoon") != NULL ||
                    strstr(g_vk.props.deviceName, "Kirin") != NULL;
-    if (mali_g2 || maleoon) setenv("LARECOMP_VK_NO_GRES", "1", 0);
     if (maleoon) {
         no_dr = true;
         cg[OPT_DR] = false;
@@ -530,11 +533,16 @@ static void create_device(void) {
     if (g_vk.host_import) {
         const char *e = getenv("LARECOMP_VK_HOST_IMPORT");
         bool xclipse = strstr(g_vk.props.deviceName, "Xclipse") || g_vk.props.vendorID == 0x144D;  // (Samsung)
-        if (e ? !atoi(e) : xclipse || mali_g2 || maleoon) {
+        bool by_setting = g_settings.gpu_heap == 0 && !vk_driver_is_turnip();
+        if ((mali || maleoon) && !e) setenv("LARECOMP_VK_NO_GRES", "1", 0);
+        if (e ? !atoi(e) : xclipse || mali || maleoon || by_setting) {
             g_vk.host_import = false;
             LOG("[vk] guest heap import left off (%s)\n", e ? "LARECOMP_VK_HOST_IMPORT=0" :
                 xclipse ? "Xclipse: its first submission fails" :
-                maleoon ? "Maleoon: Kirin GPU memory stability" : "Mali-G2-Ultra: the game's text went missing");
+                maleoon ? "Maleoon: Kirin GPU memory stability" :
+                mali ? "Mali: the game's text went missing, and memory ran out" : "settings: game memory on the GPU off");
+        }
+    }
         }
     }
 #endif
@@ -911,9 +919,30 @@ static VkPresentModeKHR present_mode(void) {
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
+#ifdef __ANDROID__
+static bool surface_lost;  // (android_surface_ready makes the surface and swapchain again at the next frame)
+
+// The surface went away under a swapchain being made (back from the background with the new window at the old one's
+// address, so it looked unchanged: issue #108's FATAL): no swapchain now; the next frame makes the surface again.
+static void swapchain_surface_lost(VkSwapchainKHR old) {
+    LOG("[vk] window surface lost while making the swapchain: made again at the next frame\n");
+    for (uint32_t i = 0; i < g_vk.sc_count; i++) vk_rp_forget_view(g_vk.sc_views[i]), vkDestroyImageView(g_vk.dev, g_vk.sc_views[i], NULL);
+    g_vk.sc_count = 0;
+    if (old) vkDestroySwapchainKHR(g_vk.dev, old, NULL);
+    g_vk.swapchain = VK_NULL_HANDLE;
+    surface_lost = true;
+}
+#endif
+
 static void create_swapchain(void) {
     VkSurfaceCapabilitiesKHR caps;
+#ifdef __ANDROID__
+    VkResult cr = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(g_vk.phys, g_vk.surface, &caps);
+    if (cr == VK_ERROR_SURFACE_LOST_KHR) { swapchain_surface_lost(g_vk.swapchain); return; }
+    VK_CHECK(cr);
+#else
     VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(g_vk.phys, g_vk.surface, &caps));
+#endif
     int w, h;
     SDL_GetWindowSizeInPixels(window, &w, &h);
 #ifdef __ANDROID__
@@ -977,7 +1006,13 @@ static void create_swapchain(void) {
         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE, .preTransform = transform,
         .compositeAlpha = alpha, .presentMode = present_mode(), .clipped = VK_TRUE,
         .oldSwapchain = old};
+#ifdef __ANDROID__
+    VkResult sr = vkCreateSwapchainKHR(g_vk.dev, &ci, NULL, &g_vk.swapchain);
+    if (sr == VK_ERROR_SURFACE_LOST_KHR || sr == VK_ERROR_NATIVE_WINDOW_IN_USE_KHR) { swapchain_surface_lost(old); return; }
+    VK_CHECK(sr);
+#else
     VK_CHECK(vkCreateSwapchainKHR(g_vk.dev, &ci, NULL, &g_vk.swapchain));
+#endif
     for (uint32_t i = 0; i < g_vk.sc_count; i++) vk_rp_forget_view(g_vk.sc_views[i]), vkDestroyImageView(g_vk.dev, g_vk.sc_views[i], NULL);
     if (old) vkDestroySwapchainKHR(g_vk.dev, old, NULL);
     g_vk.sc_format = sf.format;
@@ -1009,7 +1044,6 @@ static void recreate_swapchain(void) {
 // when it comes back): the Vulkan surface and swapchain are made again for the new window. Frames in between are
 // skipped. Before this, everything after a trip to the background stayed black (every acquire: SURFACE_LOST).
 static struct ANativeWindow *surface_aw;  // the window g_vk.surface was made for
-static bool surface_lost;
 
 static struct ANativeWindow *android_window(void) {
     return SDL_GetPointerProperty(SDL_GetWindowProperties(window), SDL_PROP_WINDOW_ANDROID_WINDOW_POINTER, NULL);
@@ -1237,7 +1271,15 @@ bool vk_async_on(void);
 bool vk_async_is_render_thread(void);
 void vk_async_present(NvnTexture *t);
 void vk_async_drain(void);
-uint64_t renderer_present_count(void) { return vk_async_on() && !vk_async_is_render_thread() ? g_game_frames : total_frames; }
+// (asked many times a draw, mostly by the render thread: its test first, from async.c's variables - the calls to
+// vk_async_on and vk_async_is_render_thread were ~4% of the render thread, simpleperf 2026-10-31; a thread-local
+// costs a dynamic TLS resolve per read in this dlopened library)
+extern pthread_t g_vk_render_thread;
+extern bool g_vk_render_started;
+uint64_t renderer_present_count(void) {
+    if (g_vk_render_started && pthread_equal(pthread_self(), g_vk_render_thread)) return total_frames;
+    return vk_async_on() ? g_game_frames : total_frames;
+}
 #else
 uint64_t renderer_present_count(void) { return total_frames; }
 #endif
@@ -1667,9 +1709,11 @@ void vk_shaders_init(void);
 static void quick_exit_handler(void) {
     static int trace = -1;
     if (trace < 0) trace = getenv("LARECOMP_VK_TRACE") != NULL;
-    if (trace) LOG("[vk] exit: waiting for the GPU\n");
     if (g_vk.dev) {
+#ifndef __ANDROID__
+        if (trace) LOG("[vk] exit: waiting for the GPU\n");
         vkDeviceWaitIdle(g_vk.dev);
+#endif
         if (trace) LOG("[vk] exit: saving the pipeline cache\n");
         vk_pipeline_cache_save();
     }
@@ -1693,13 +1737,14 @@ bool vk_adreno_8xx(const char *name) {
     return n >= 800 && n < 900;
 }
 // A Turnip path's setting (-1 Automatic, 1 on, 0 off) for this GPU
-bool vk_turnip_path_on(int setting) {
-    if (setting >= 0) return setting != 0;
-    if (vk_adreno_8xx(g_vk.props.deviceName)) return true;
-    // Turnip names an Adreno 732 "Adreno (TM) 735", and vk_adreno_8xx takes that for a pre-8xx GPU: the heap stayed
-    // off, and the game's text glyphs (a buffer ~2.7 GB into the 3 GB heap, outside any storage descriptor's reach)
-    // read as zeros - every menu, dialogue and item name blank. A Turnip that can place the heap in GPU memory is
-    // meant to be on for those paths: without it the game is unreadable on such a GPU.
+bool vk_turnip_path_on(int setting) { return setting < 0 ? vk_adreno_8xx(g_vk.props.deviceName) : setting != 0; }
+// gpu_heap's: Automatic is on wherever Turnip can place the heap. Off on a Turnip Adreno 7xx (an Adreno 732, which
+// Turnip names "Adreno (TM) 735": PR #103), the game's text glyphs (a buffer ~2.7 GB into the 3 GB heap, past Turnip's
+// 128 MB storage range) read as zeros - every menu, dialogue and item name blank. Only the heap: 0.2.5 widened
+// vk_turnip_path_on itself, and with it the in-place target reads it also gates, checked on the Adreno 830 only - the
+// likely cause of the terrain striped on an Adreno 750 (issue #129: BOTW's terrain decals read the targets they write).
+bool vk_turnip_heap_on(int setting) {
+    if (setting >= 0 || vk_adreno_8xx(g_vk.props.deviceName)) return vk_turnip_path_on(setting);
     return g_vk.map_placed && vk_driver_is_turnip();
 }
 static bool g_lrz_at_start = true;
@@ -1709,7 +1754,6 @@ const char *vk_gpu_name(void) { return g_vk.props.deviceName; }
 
 void ui_window_init(void) {
     if (window) return;
-    atexit(quick_exit_handler);
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 #ifdef __ANDROID__
     SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");  // (the back button opens the menu: ui/touch_controls.mm)
@@ -1805,6 +1849,7 @@ void ui_window_init(void) {
     create_swapchain();
     vk_exec_init();
     vk_shaders_init();
+    atexit(quick_exit_handler);
 }
 
 SDL_Window *ui_window(void) { return window; }
@@ -1916,6 +1961,7 @@ int ui_run(void) {
 #endif
             if (e.type == SDL_EVENT_QUIT) {
                 LOG("window closed\n");
+                quick_exit_handler();
                 exit(0);
             }
             extern bool input_user_blocked(const SDL_Event *e);
